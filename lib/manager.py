@@ -132,7 +132,12 @@ def off():
                 nm('device', 'disconnect', interface, check=False)
                 run('iw', 'dev', interface, 'del')
             elif before['connection']:
-                nm('--wait', '30', 'connection', 'up', before['connection'], 'ifname', interface)
+                # USB tethering profiles can disappear when the phone is unplugged.
+                # Do not let an obsolete UUID block cleanup or the next On run.
+                if nm('-g', 'connection.uuid', 'connection', 'show', before['connection'], check=False):
+                    nm('--wait', '30', 'connection', 'up', before['connection'], 'ifname', interface)
+                else:
+                    print(f'{interface}: previous profile is gone; keeping the current connection.', flush=True)
             else:
                 nm('device', 'disconnect', interface, check=False)
         except Exception as error:
