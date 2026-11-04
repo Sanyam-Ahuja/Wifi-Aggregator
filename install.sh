@@ -27,7 +27,7 @@ runtime_dir="$stage/var/lib/warp-dual-test"
 bin_dir="$stage/usr/local/bin"
 
 if [[ -z $stage ]]; then
-    for executable in python3 nmcli ip iw nft socat firewall-cmd systemd-run warp-cli warp-svc flock; do
+    for executable in python3 nmcli ip iw arping nft socat firewall-cmd systemd-run warp-cli warp-svc flock; do
         if ! command -v "$executable" >/dev/null; then
             echo "Missing required command: $executable" >&2
             exit 1

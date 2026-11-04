@@ -4,7 +4,7 @@ Combine multiple Wi-Fi identities and optional USB phone tethering through paral
 
 The tool creates a second station on the internal Wi-Fi radio, connects the chosen networks with NetworkManager, starts an isolated WARP instance per path, and distributes device IPv4 connections before encryption. USB interface names are discovered each run. Two launchers control the complete setup, including virtual-adapter creation after reboot.
 
-Requirements: Linux with systemd, NetworkManager, firewalld, iproute2, `iw`, `nft`, `socat`, Bash and Python 3.10+, plus the official Cloudflare WARP client. The internal Wi-Fi driver must support two simultaneous managed stations. Tested with Fedora Silverblue, an internal MediaTek adapter, a TP-Link USB Wi-Fi adapter and Android USB tethering. This is hardware-aware tooling for that Linux stack, not a driver installer.
+Requirements: Linux with systemd, NetworkManager, firewalld, iproute2, `iw`, `arping` (iputils), `nft`, `socat`, Bash and Python 3.10+, plus the official Cloudflare WARP client. The internal Wi-Fi driver must support two simultaneous managed stations. Tested with Fedora Silverblue, an internal MediaTek adapter, a TP-Link USB Wi-Fi adapter and Android USB tethering. This is hardware-aware tooling for that Linux stack, not a driver installer.
 
 Install from the checkout:
 

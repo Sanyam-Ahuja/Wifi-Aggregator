@@ -49,6 +49,25 @@ def unit(name, command, properties=()):
     run(*args, "--", *command)
 
 
+def isolate_arp(state):
+    """Keep same-subnet uplinks from answering ARP for one another's IPs."""
+    settings = state.setdefault('arp_settings', {})
+    for _, interface, *_ in state['specs']:
+        for key in ('arp_ignore', 'arp_announce'):
+            name = f'net.ipv4.conf.{interface}.{key}'
+            settings.setdefault(name, run('sysctl', '-n', name))
+    save(state)
+    for _, interface, *_ in state['specs']:
+        run('sysctl', '-q', '-w', f'net.ipv4.conf.{interface}.arp_ignore=1',
+            f'net.ipv4.conf.{interface}.arp_announce=2')
+    # Correct upstream neighbor entries that may already point at another NIC.
+    for _, interface, *_ in state['specs']:
+        data = json.loads(run('ip', '-j', '-4', 'addr', 'show', 'dev', interface))
+        address = next(a['local'] for a in data[0]['addr_info'] if a['scope'] == 'global')
+        run('arping', '-U', '-I', interface, '-c', '2', '-w', '2', address,
+            check=False, timeout=5)
+
+
 def stop():
     if not STATE.exists():
         print("Aggregation is already off.", flush=True)
@@ -82,6 +101,8 @@ def stop():
     run("nft", "delete", "table", "ip", "warp_dual_test", check=False)
     if state.get("forward_changed"):
         run("sysctl", "-q", "-w", f"net.ipv4.ip_forward={state['ip_forward']}")
+    for name, value in state.get('arp_settings', {}).items():
+        run('sysctl', '-q', '-w', f'{name}={value}', check=False)
     if state.get('ipv4_hash_changed'):
         run('sysctl', '-q', '-w', f"net.ipv4.fib_multipath_hash_policy={state['ipv4_hash']}")
     state["stopped_at"] = time.time()
@@ -125,6 +146,11 @@ def start(protocol, specs):
     state = {"started_at": time.time(), "protocol": protocol, "lanes": [], "specs": selected, "auto_rollback": False,
              "ip_forward": run("sysctl", "-n", "net.ipv4.ip_forward"),
              'ipv4_hash': run('sysctl', '-n', 'net.ipv4.fib_multipath_hash_policy')}
+    # Changing ip_forward can reset interface defaults; capture originals first.
+    state['arp_settings'] = {
+        f'net.ipv4.conf.{interface}.{key}': run('sysctl', '-n', f'net.ipv4.conf.{interface}.{key}')
+        for _, interface, *_ in selected for key in ('arp_ignore', 'arp_announce')
+    }
     snapshot = BASE / f"snapshot-{int(time.time())}"
     snapshot.mkdir(mode=0o700)
     for name, args in {
@@ -149,6 +175,7 @@ def start(protocol, specs):
             state["forward_changed"] = True
             save(state)
             run("sysctl", "-q", "-w", "net.ipv4.ip_forward=1")
+        isolate_arp(state)
         run("nft", "add", "table", "ip", "warp_dual_test")
         run("nft", "add", "chain", "ip", "warp_dual_test", "postrouting",
             "{ type nat hook postrouting priority srcnat - 5; policy accept; }")

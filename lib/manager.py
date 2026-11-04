@@ -89,7 +89,7 @@ def snapshot_interface(state, interface):
         persist(state)
 
 
-def connect_wifi_clone(state, source_uuid, interface, role, metric):
+def connect_wifi_clone(state, source_uuid, interface, role, metric, shared_bssid=None):
     snapshot_interface(state, interface)
     name = PREFIX + role + '-' + state['id']
     state['created_profiles'].append(name)
@@ -103,6 +103,11 @@ def connect_wifi_clone(state, source_uuid, interface, role, metric):
        'ipv4.never-default', 'no', 'ipv4.may-fail', 'no', 'ipv4.dhcp-client-id', 'mac', 'ipv4.route-metric', str(metric),
        'ipv6.method', 'auto', 'ipv6.addresses', '', 'ipv6.gateway', '',
        'ipv6.route-metric', str(metric))
+    if shared_bssid:
+        # Keep the second station on the primary station's current AP instead
+        # of allowing independent roaming on their shared physical radio.
+        nm('connection', 'modify', name, '802-11-wireless.bssid', shared_bssid,
+           '802-11-wireless.powersave', '2')
     nm('--wait', '40', 'connection', 'up', name, 'ifname', interface, interactive=True, timeout=60)
 
 
@@ -211,7 +216,12 @@ def on(options):
             address = bytearray(secrets.token_bytes(6)); address[0] = (address[0] | 2) & 254
             run('ip', 'link', 'set', 'dev', VIRTUAL, 'address', ':'.join(f'{b:02x}' for b in address))
         nm('device', 'set', VIRTUAL, 'managed', 'yes')
-        connect_wifi_clone(state, profile, VIRTUAL, 'virtual', 500)
+        primary_link = run('iw', 'dev', primary, 'link')
+        shared_bssid = next((line.split()[2] for line in primary_link.splitlines()
+                             if line.strip().startswith('Connected to ')), None)
+        if not shared_bssid:
+            raise RuntimeError('Primary Wi-Fi lost association before virtual station setup')
+        connect_wifi_clone(state, profile, VIRTUAL, 'virtual', 500, shared_bssid=shared_bssid)
         specs = [('a', primary, '10.203.41', 40101, 1101), ('b', VIRTUAL, '10.203.42', 40102, 1102)]
         if usb_wifi and mode in ('3', 'phone', 'auto'):
             interface = usb_wifi[0]['name']

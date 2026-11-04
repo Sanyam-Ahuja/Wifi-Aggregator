@@ -23,6 +23,8 @@ The manager discovers the internal Wi-Fi, USB Wi-Fi and USB Ethernet devices wit
 
 Each adapter must obtain an IPv4 address and default gateway before WARP setup proceeds. The manager starts the host WARP service as encrypted bootstrap DNS, preserving its previous mode and connection state for Off. Wi-Fi association stays under the host NetworkManager; physical Wi-Fi radios are not moved into namespaces.
 
+The virtual station's per-run profile is pinned to the primary station's current access-point BSSID, with Wi-Fi power saving disabled for that profile. This reduces independent roaming between bands/access points on their shared radio. The BSSID is discovered on each On; no access-point address is hardcoded. The original saved profile is unchanged. If the primary station later roams, rerun Off/On to select its new access point. A dropped physical connection can remove its underlay routes; this version does not automatically rebuild them or remove failed paths from ECMP.
+
 | Path | Namespace | Host veth | Private subnet | Underlay table | Underlay rule |
 | --- | --- | --- | --- | --- | --- |
 | A | `wdx-a` | `wdxh-a` | `10.203.41.0/30` | `40101` | `1101` |
@@ -33,6 +35,8 @@ Each adapter must obtain an IPv4 address and default gateway before WARP setup p
 Interfaces are assigned to these logical slots at startup. C is USB Wi-Fi when present, or tethering when it is the third path; D is tethering in a four-path setup. No external physical-interface name is fixed in the manager.
 
 Each namespace gets a veth connection to the host, private DNS bootstrap listeners, NAT, a physical-interface routing table and an unreachable fallback. Rules matching packets arriving from its host veth run before the device-wide policy. That pins the outer WARP connection to the chosen adapter and prevents it from recursively entering another tunnel.
+
+Same-subnet uplinks also need ARP isolation. Without it, Linux can answer requests for a USB Wi-Fi address on the internal Wi-Fi, so return traffic converges on one adapter despite correct outgoing policy routes. Startup saves each selected interface's `arp_ignore` and `arp_announce`, sets them to `1` and `2`, and sends gratuitous ARP announcements with `arping` to refresh upstream neighbor entries. Off restores the saved values, skipping vanished interfaces. A local packet capture confirmed the incorrect USB-IP replies arriving on the internal NIC before this fix.
 
 Each WARP daemon runs in its own transient systemd unit with private network and mount namespaces, independent registration state, a private `/run`, and private mounts for WARP state, logs and `/etc`. The private configuration directory prevents DNS recovery from exposing the host resolver files. The control helper checks the network and mount namespace identities before invoking `warp-cli`; two CLI processes alone would otherwise control the same host daemon.
 
