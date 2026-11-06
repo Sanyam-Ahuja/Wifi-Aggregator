@@ -50,6 +50,8 @@ NetworkManager binds its Internet probes to physical adapters. The aggregate pol
 
 The setup checks for conflicting interfaces, subnets, tables, rule priorities and proxy-stage ports. It uses a process lock so On and Off cannot run concurrently. Before modifying networking it records state under the root-owned runtime directory. Startup failures clean up partial work. A stale manager manifest after reboot is cleaned up on the next invocation.
 
+Namespace mounts disappear on reboot, while their `/etc/netns/wdx-*` configuration directories can remain. Startup reuses those directories and refreshes its DNS files after verifying that no live namespace conflicts. A leftover configuration directory alone does not block startup.
+
 Off removes device-wide policy before stopping the tunnels, removes namespace and firewall additions, restores changed kernel settings, removes tool-created virtual adapters and cloned profiles, restores preceding physical connections and restores the host WARP state. Registrations and diagnostic snapshots remain in the private runtime directory for reuse. This private state must not be committed to a source repository.
 
 Hardware lifecycle checks were performed locally for internal-pair, three-Wi-Fi and four-path USB-tethering operation. Those checks included starting with no virtual station, creating it automatically, successful `warp=on` checks per path, full NetworkManager IPv4 connectivity, and Off removing the namespaces, aggregate policy and created virtual station while restoring the original flow-hash setting. There is no timer that turns off a running setup.

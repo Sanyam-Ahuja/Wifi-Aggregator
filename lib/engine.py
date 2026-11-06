@@ -189,7 +189,9 @@ def start(protocol, specs):
             ns, host = f"wdx-{lane}", f"wdxh-{lane}"
             run("ip", "netns", "add", ns)
             dnsdir = Path("/etc/netns") / ns
-            dnsdir.mkdir(parents=True, mode=0o755)
+            # Namespace mounts disappear on reboot; their /etc/netns DNS
+            # directories can survive. Reuse them and refresh our DNS files.
+            dnsdir.mkdir(parents=True, mode=0o755, exist_ok=True)
             (dnsdir / "resolv.conf").write_text(f"nameserver {prefix}.1\noptions timeout:2 attempts:2\n")
             (dnsdir / "nsswitch.conf").write_text("passwd: files\ngroup: files\nhosts: files dns\nnetworks: files\n")
             run("ip", "link", "add", host, "type", "veth", "peer", "name", "eth0", "netns", ns)
